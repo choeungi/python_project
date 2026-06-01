@@ -1,0 +1,21 @@
+2026-04-27 09:00:01 INFO User login success
+2026-04-27 09:01:12 WARN Disk usage 85%
+2026-04-27 09:02:33 ERROR 500 /api/user
+2026-04-27 09:03:45 ERROR 404 /api/login
+2026-04-27 09:04:02 INFO Data processed successfully
+2026-04-27 09:05:17 ERROR 500 /api/order
+2026-04-27 09:06:29 WARN Memory usage high
+2026-04-27 09:07:40 ERROR DB_CONN_FAIL Database connection failed
+2026-04-27 09:08:55 ERROR TIMEOUT External API timeout
+2026-04-27 09:09:10 INFO Scheduled job started
+2026-04-27 09:10:22 ERROR 403 /api/admin
+2026-04-27 09:11:35 ERROR 500 /api/payment
+2026-04-27 09:12:48 WARN CPU usage high
+2026-04-27 09:13:59 ERROR
+2026-04-27 09:14:11 INFO User logout
+2026-04-27 09:15:23 ERROR 404 /api/product
+2026-04-27 09:16:37 ERROR DB_CONN_FAIL Retry failed
+2026-04-27 09:17:49 INFO Cache cleared
+2026-04-27 09:18:55 ERROR 500 /api/cart
+2026-04-27 09:19:59 WARN Network latency detected
+2026-04-27 09:13:59 ERROR
