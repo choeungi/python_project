@@ -1,11 +1,71 @@
 import argparse
 import os
 import re
+import json
 from datetime import datetime, timedelta
 
 ERROR_CODE_REGEX = re.compile(r"(?<=ERROR\s)\w+")
 
-def parse_log_line(log: str) -> dict:
+def select_mode(filename_extention: str):
+    if filename_extention == "standard":
+        return parse_standard_log
+    elif filename_extention == "jsonl":
+        return parse_json_log
+    elif filename_extention == "apache":
+        return parse_apache_log
+    elif filename_extention == "docker":
+        return parse_docker_log
+
+def counter(log: dict, count: dict):
+    if log["level"] == "INFO":
+        count["INFO"] += 1
+    elif log["level"] == "WARN":
+        count["WARN"] += 1
+    if log["level"] == "ERROR":
+        count["ERROR"] += 1
+
+def print_statistics(play_time: datetime, count: dict, error_only: bool, error_code: dict|None) -> datetime:
+    now = datetime.now()
+    diff = now - play_time
+
+    if diff.seconds >= 10:
+        if error_only:
+            if error_code:
+                print("===== Error Code =====")
+                for key, value in error_code.items():
+                    print(f"{key} : {value}")
+                print("======================")
+        else:
+            print("===== Statistics =====")
+            print(f"INFO : {count["INFO"]}")
+            print(f"WARN : {count["WARN"]}")
+            print(f"ERROR : {count["ERROR"]}")
+            print("======================")
+        return now
+
+    return play_time
+
+def count_error_code(parse: dict, error_code: dict|None):
+    if not isinstance(error_code, dict):
+        return
+    
+    search_code = parse["code"]
+
+    if search_code == None:
+        log_text = " ".join(parse.values())
+        search_code = ERROR_CODE_REGEX.search(log_text)
+    
+        if not search_code:
+            search_code = "UNKNOWN"
+        else:
+            search_code = search_code.group()
+    
+    if search_code not in error_code:
+        error_code[search_code] = 1
+    else:
+        error_code[search_code] += 1
+
+def parse_standard_log(log: str) -> dict:
     line = log.strip().split()
 
     if len(line) < 3:
@@ -19,26 +79,38 @@ def parse_log_line(log: str) -> dict:
     }
     return log_format
 
-def counter(log: dict, count: dict):
-    if log["level"] == "INFO":
-        count["INFO"] += 1
-    elif log["level"] == "WARN":
-        count["WARN"] += 1
-    if log["level"] == "ERROR":
-        count["ERROR"] += 1
+def parse_json_log(log: str):
+    conversion = json.loads(log)
+    parse_date_time = conversion["time"].split(" ")
 
-def monitor_log(path: str, file_size_temp:int, error_only: bool, error_code=None,) -> int:
+    log_format = {
+        "date": parse_date_time[0],
+        "time": parse_date_time[1],
+        "level": conversion["level"],
+        "messages": conversion["message"]
+    }
+    log_format["code"] = conversion["code"] if "code" in list(conversion.keys()) else None
+
+    return log_format
+
+def parse_apache_log():
+    pass
+
+def parse_docker_log():
+    pass
+
+def monitor_log(path: str, file_size_temp:int, error_only: bool, error_code: dict|None, mode) -> int:
     with open(path, "r") as file:
         file.seek(file_size_temp)
 
         log_line = file.read()
         for line in log_line.splitlines():
-            log_parse = parse_log_line(line)
+            log_parse = mode(line)
 
             if log_parse:
                 counter(log_parse, count)
 
-            if args.error_only:
+            if error_only:
                 if log_parse["level"] == "ERROR":
                     print(line.strip("\n"))
                     count_error_code(log_parse, error_code)
@@ -46,40 +118,6 @@ def monitor_log(path: str, file_size_temp:int, error_only: bool, error_code=None
                 print(line.strip("\n"))
 
         return os.path.getsize(path)
-
-def print_statistics(play_time: datetime, count: dict) -> datetime:
-    now = datetime.now()
-    diff = now - play_time
-
-    if diff.seconds >= 10:
-        print("===== Statistics =====")
-        print(f"INFO : {count["INFO"]}")
-        print(f"WARN : {count["WARN"]}")
-        print(f"ERROR : {count["ERROR"]}")
-        print("======================")
-        return now
-
-    return play_time
-
-def count_error_code(parse: dict, error_code: dict):
-    if error_code == None:
-        return
-    
-    log_text = " ".join(parse.values())
-
-    search_code = ERROR_CODE_REGEX.search(log_text)
-    
-    if not search_code:
-        search_code = "UNKNOWN"
-    else:
-        search_code = search_code.group()
-    
-    if search_code not in error_code:
-        error_code[search_code] = 1
-    else:
-        error_code[search_code] += 1
-
-
 
 parse = argparse.ArgumentParser(description="Monitors log files and outputs changes.")
 parse.add_argument("log_path", help="This is the path to the log file to be monitored.")
@@ -96,9 +134,13 @@ count = {
     "WARN" : 0,
     "ERROR" : 0
 }
+error_code = None
 
 if args.error_only:
     error_code = {}
+    
+filename_extention = os.path.splitext(path)[1].replace(".", "")
+mode = select_mode(filename_extention)
 
 play_time = datetime.now()
 timer = int(input("모니터링을 수행할 시간을 입력하세요.(단위: 분) : "))
@@ -109,6 +151,6 @@ file_size_temp = os.path.getsize(path)
 while datetime.now() < end_time:
     current_file_size = os.path.getsize(path)
     if current_file_size > file_size_temp:
-        file_size_temp = monitor_log(path, file_size_temp, error_code)
+        file_size_temp = monitor_log(path, file_size_temp, args.error_only, error_code, mode)
 
-    play_time = print_statistics(play_time, count)
+    play_time = print_statistics(play_time, count, args.error_only, error_code)
