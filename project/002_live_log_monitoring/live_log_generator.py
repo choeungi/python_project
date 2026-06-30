@@ -50,12 +50,6 @@ LOG_FORMAT = {
         302 : "192.168.1.20 - - [08/Jun/2026:14:22:25 +0900] \"POST /login HTTP/1.1\" 302 512",
         403 : "192.168.1.30 - - [08/Jun/2026:14:22:40 +0900] \"GET /admin HTTP/1.1\" 403 128",
         500 : "192.168.1.35 - - [08/Jun/2026:14:22:45 +0900] \"POST /api/order HTTP/1.1\" 500 256",
-    },
-    "docker" : {
-        "info" : "2026-06-08T09:14:22Z INFO Application startup complete",
-        "WARN" : "2026-06-08T09:15:10Z WARN Invalid login attempt user_id=unknown ip=198.51.100.23",
-        "db_query_fail" : "2026-06-08T09:15:42Z ERROR DB_QUERY_FAIL order_service failed to fetch order_id=5012",
-        "timeout" : "2026-06-08T09:16:35Z ERROR TIMEOUT payment_service request timeout"
     }
 }
 
@@ -67,7 +61,7 @@ def create_log(log):
     while True:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        with open(f"{path}/{log["log_path"]}", "a") as file:
+        with open(f"{path}/logs/{log["log_path"]}", "a") as file:
             if ".json" in log["log_path"]:
                 log_line = log["log"][play_count-1].copy()
                 log_line["time"] = now
@@ -86,8 +80,6 @@ def create_log(log):
             print("준비된 모든 Log가 출력되었습니다. 계속 진행하시겠습니까?")
             select = input("입력 (YES/NO) : ").lower()
             while select != "yes" and select != "no":
-                if select == "no":
-                    break
                 print("잘못된 입력입니다. 다시 시도해주십시오.")
                 select = input("입력 (YES/NO) : ").lower()
             if select == 'no':
@@ -107,19 +99,16 @@ def select_form(form):
 
     elif form == "apache":
         result["log_path"] = "apache.log"
-
-    elif form == "docker":
-        result["log_path"] = "docker.log"
     
     result["log"] = LOG_FORMAT[form]
     return result
 
 parse = argparse.ArgumentParser(description="Saves the specified logs to a file sequentially according to the specified format.")
-parse.add_argument("format", choices=["standard", "json", "apache", "docker"],
+parse.add_argument("format", choices=["standard", "json", "apache"],
                    help="standard : This is the default option.\n" \
                         "json : This is an option for JSON logging.\n"
                         "apache : This is the Apache web server log style format.\n"
-                        "docker : This is the Docker container log format.")
+)
 
 args = parse.parse_args()
 form = select_form(args.format)
