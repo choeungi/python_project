@@ -5,16 +5,20 @@ import json
 from datetime import datetime, timedelta
 
 ERROR_CODE_REGEX = re.compile(r"(?<=ERROR\s)\w+")
-
+APACHE_REGEX = re.compile(
+        r"(?P<ip>\d+\.\d+\.\d+\.\d+) - - "
+        r"\[(?P<date>[^\:]+):(?P<time>[^\]]+)\] "
+        r"\"(?P<method>\w+) (?P<url>[^ ]+) (?P<protocol>[^\"]+)\" "
+        r"(?P<status>\d+) "
+        r"(?P<size>\d+)"
+    )
 def select_mode(filename_extention: str):
     if filename_extention == "standard":
         return parse_standard_log
-    elif filename_extention == "jsonl":
+    elif filename_extention == "json":
         return parse_json_log
     elif filename_extention == "apache":
         return parse_apache_log
-    elif filename_extention == "docker":
-        return parse_docker_log
 
 def counter(log: dict, count: dict):
     if log["level"] == "INFO":
@@ -49,7 +53,7 @@ def count_error_code(parse: dict, error_code: dict|None):
     if not isinstance(error_code, dict):
         return
     
-    search_code = parse["code"]
+    search_code = parse.get["code"]
 
     if search_code == None:
         log_text = " ".join(parse.values())
@@ -93,11 +97,24 @@ def parse_json_log(log: str):
 
     return log_format
 
-def parse_apache_log():
-    pass
+def parse_apache_log(log: str):
+    
+    partition = APACHE_REGEX.search(log).groupdict()
+    log_format = {
+        "date" : partition["date"],
+        "time" : partition["time"],
+        "messages" : f"{partition["ip"]} : {partition["protocol"]} {partition["method"]} {partition["url"]} {partition["status"]} {partition["size"]}(Byte)"
+    }
+    partition["status"] = int(partition["status"])
+    if partition["status"] >= 400:
+        log_format["level"] = "ERROR"
+        log_format["code"] = partition["status"]
+    elif partition["status"] >= 300:
+        log_format["level"] = "WARN"
+    else:
+        log_format["level"] = "INFO"
 
-def parse_docker_log():
-    pass
+    return log_format
 
 def monitor_log(path: str, file_size_temp:int, error_only: bool, error_code: dict|None, mode) -> int:
     with open(path, "r") as file:
@@ -139,7 +156,7 @@ error_code = None
 if args.error_only:
     error_code = {}
     
-filename_extention = os.path.splitext(path)[1].replace(".", "")
+filename_extention = os.path.splitext(path)[0].split("/")[-1]
 mode = select_mode(filename_extention)
 
 play_time = datetime.now()
