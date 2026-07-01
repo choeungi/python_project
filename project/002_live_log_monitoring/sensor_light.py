@@ -4,7 +4,7 @@ import re
 import json
 from datetime import datetime, timedelta
 
-ERROR_CODE_REGEX = re.compile(r"(?<=ERROR\s)\w+")
+ERROR_CODE_REGEX = re.compile(r"(?<=ERROR\s)[^a-z]+\b")
 APACHE_REGEX = re.compile(
         r"(?P<ip>\d+\.\d+\.\d+\.\d+) - - "
         r"\[(?P<date>[^\:]+):(?P<time>[^\]]+)\] "
@@ -12,6 +12,7 @@ APACHE_REGEX = re.compile(
         r"(?P<status>\d+) "
         r"(?P<size>\d+)"
     )
+
 def select_mode(filename_extention: str):
     if filename_extention == "standard":
         return parse_standard_log
@@ -53,17 +54,15 @@ def count_error_code(parse: dict, error_code: dict|None):
     if not isinstance(error_code, dict):
         return
     
-    search_code = parse.get["code"]
-
-    if search_code == None:
-        log_text = " ".join(parse.values())
-        search_code = ERROR_CODE_REGEX.search(log_text)
+    log_text = " ".join(parse.values())
     
-        if not search_code:
-            search_code = "UNKNOWN"
-        else:
-            search_code = search_code.group()
+    search_code = parse.get("code") if parse.get("code") else ERROR_CODE_REGEX.search(log_text)
     
+    if not search_code:
+        search_code = "UNKNOWN"
+    elif isinstance(search_code, re.Match):
+        search_code = search_code.group()
+            
     if search_code not in error_code:
         error_code[search_code] = 1
     else:
@@ -81,6 +80,7 @@ def parse_standard_log(log: str) -> dict:
         "level": line[2],
         "messages": " ".join(line[3:])
     }
+
     return log_format
 
 def parse_json_log(log: str):
@@ -93,23 +93,22 @@ def parse_json_log(log: str):
         "level": conversion["level"],
         "messages": conversion["message"]
     }
-    log_format["code"] = conversion["code"] if "code" in list(conversion.keys()) else None
+    log_format["code"] = str(conversion["code"]) if "code" in list(conversion.keys()) else None
 
     return log_format
 
 def parse_apache_log(log: str):
-    
     partition = APACHE_REGEX.search(log).groupdict()
     log_format = {
         "date" : partition["date"],
         "time" : partition["time"],
         "messages" : f"{partition["ip"]} : {partition["protocol"]} {partition["method"]} {partition["url"]} {partition["status"]} {partition["size"]}(Byte)"
     }
-    partition["status"] = int(partition["status"])
-    if partition["status"] >= 400:
+
+    if int(partition["status"]) >= 400:
         log_format["level"] = "ERROR"
         log_format["code"] = partition["status"]
-    elif partition["status"] >= 300:
+    elif int(partition["status"]) >= 300:
         log_format["level"] = "WARN"
     else:
         log_format["level"] = "INFO"
